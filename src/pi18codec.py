@@ -34,6 +34,5 @@ def dec(m):
     b = m[5:-3]    # data buffer excluding CRC and '\r'
     if crc(b) != c: return ['0', 'CRC error']  # CRC doesn't match
 
-    l = b.decode().split(',')
+    l = b.split(',')
     return [mt] + l
-
