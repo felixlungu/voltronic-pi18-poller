@@ -15,14 +15,16 @@ def mp(m): return enc(['P'] + m)
 def swrd(s: S, m: bytes, f=[it]):
     s.reset_input_buffer()
     s.reset_output_buffer()
+    print('SWRD: m: ',m, '\n')
     s.write(m)
     s.flush()
     b = s.read_until(expected = b'\r')
+    print('SWRD b: ', b, '\n')
     return dec(b)
 
 # convert the results from swrd
 def swrdf(s: S, m: bytes, f=[lambda x: x]):
-    r = swrd(ser, m)
+    r = swrd(s, m)
     if r[0] != 'D': return ''
     return list(map(lambda f,x: f(x), f,r[1:]))
 
@@ -37,7 +39,7 @@ def pi(s: S): return swrdf(s, _pi)
 
 # T: get device time
 _t = mp(['T'])
-def t(s: S): return swrdf(s, _pi, [tb]) 
+def t(s: S): return swrdf(s, _t, [tb]) 
 
 # ET: total energy since reset in Wh
 _et = mp(['ET'])
@@ -62,10 +64,10 @@ def ed(s: S, y: int, m: int, d: int):
     return swrdf(s, _ed, [f1ksb])
 
 # ID: get device serial number
-_id = mp('ID')
+_id = mp(['ID'])
 def id(s: S): return swrdf(s, _id, [snb])
 
 # VFW: firmware version
-_vfw = mp('VFW')
+_vfw = mp(['VFW'])
 def vfw(s: S): return swrdf(s, _vfw, [sb, sb, sb])
 
