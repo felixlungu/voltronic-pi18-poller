@@ -40,8 +40,8 @@ def dec(m):
     if m[0:1] != b'^' or m[-1:] != b'\r': return ['0', 'malformed']
 
     mt = m[1:2].decode()
-    if mt == '0': return ['0', 'rejected']   # rejected command: not implemented or garbage on the serial line
-    if mt == '1': return ['1', 'accepted']   # the set command was accepted 
+    if mt == '0': return ['0', 'NAK']   # rejected command: not implemented or garbage on the serial line
+    if mt == '1': return ['1', 'ACK']   # the set command was accepted 
     
     n = int(m[2:5].decode()) # message len including CRC
 

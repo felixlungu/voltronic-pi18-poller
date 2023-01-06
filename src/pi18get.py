@@ -3,8 +3,9 @@
 from datetime import datetime
 from pi18codec import enc, dec
 from pi18util import it, tb, snb, isb, sb, f10sb, f1ksb
+import asyncio
 
-from serial import Serial as S
+from aioserial import AioSerial as S
 
 ############
 ### internal utility functions
@@ -12,21 +13,16 @@ from serial import Serial as S
 def mp(m): return enc(['P'] + m)
 
 # serial write message, read, decode and convert a reply 
-def swrd(s: S, m: bytes, f=[it]):
-    s.reset_input_buffer()
-    s.reset_output_buffer()
-    print('SWRD: m: ',m, '\n')
-    s.write(m)
-    s.flush()
-    b = s.read_until(expected = b'\r')
-    print('SWRD b: ', b, '\n')
-    return dec(b)
-
-# convert the results from swrd
-def swrdf(s: S, m: bytes, f=[lambda x: x]):
-    r = swrd(s, m)
-    if r[0] != 'D': return ''
-    return list(map(lambda f,x: f(x), f,r[1:]))
+async def swrd(s: S, m: bytes, d={'value': lambda x: x}):
+    # s.reset_input_buffer()
+    # s.reset_output_buffer()
+    print(f'SWRD: PORT: {s.port} m: {m}')
+    await s.write_async(m)
+    b = await s.read_until_async(expected = b'\r')
+    print(f'SWRD: port: {s.port} b: {b}')
+    r = dec(b)
+    if r[0] != 'D': return {'result': r[1]}
+    return {'result': 'D'} | dict(map(lambda k,f,x: (k, f(x)), d.keys(), d.values(), r[1:]))
 
 
 ##############
@@ -35,39 +31,45 @@ def swrdf(s: S, m: bytes, f=[lambda x: x]):
 
 # PI: get protocol information
 _pi = mp(['PI'])
-def pi(s: S): return swrdf(s, _pi)
+async def pi(s: S): return await swrd(s, _pi, {'version': it})
 
 # T: get device time
 _t = mp(['T'])
-def t(s: S): return swrdf(s, _t, [tb]) 
+async def t(s: S): return await swrd(s, _t, {'datetime': tb}) 
 
-# ET: total energy since reset in Wh
+# ET: total energy since reset in kWh
+dnrg = {'energy': f1ksb}
 _et = mp(['ET'])
-def et(s: S): return swrdf(s, _et, [f1ksb])
+async def et(s: S): return await swrd(s, _et, dnrg)
 
-# EYyyyy: energy for year 'yyyy' in Wh
+# EYyyyy: energy for year 'yyyy' in kWh
 # y: int (2022)
-def ey(s: S, y: int):
+async def ey(s: S, y: int):
     _ey = mp(['EY', f'{y:04d}'])
-    return swrdf(s, _ey, [f1ksb])
+    return await swrd(s, _ey, dnrg)
 
-# EMyyyymm: energy for a year 'yyyy' and month 'mm' in Wh
+# EMyyyymm: energy for a year 'yyyy' and month 'mm' in kWh
 # y: year int (2022), m: month int (1 for january)
-def em(s: S, y: int, m: int): 
+async def em(s: S, y: int, m: int): 
     _em = mp(['EM',f'{y:04d}{m:02d}'])
-    return swrdf(s, _em, [f1ksb])
+    return await swrd(s, _em, dnrg)
 
 # EDyyyymmdd: energy for year 'yyyy', month 'mm' and day 'dd'
 # y: year, m: month, d: day (1 is first day of the month)
-def ed(s: S, y: int, m: int, d: int): 
+async def ed(s: S, y: int, m: int, d: int): 
     _ed = mp(['EM',f'{y:04d}{m:02d}{d:02d}'])
-    return swrdf(s, _ed, [f1ksb])
+    return await swrd(s, _ed, dnrg)
 
 # ID: get device serial number
 _id = mp(['ID'])
-def id(s: S): return swrdf(s, _id, [snb])
+async def id(s: S): return await swrd(s, _id, {'serial number': snb})
 
 # VFW: firmware version
 _vfw = mp(['VFW'])
-def vfw(s: S): return swrdf(s, _vfw, [sb, sb, sb])
+async def vfw(s: S): return await swrd(s, _vfw, {'main cpu version':    sb, 
+                                      'slave 1 cpu version': sb,
+                                      'slave 2 cpu version': sb})
 
+# _piri = mp(['PIRI'])
+# _piri_df = {''}
+# def piri(s: S):
