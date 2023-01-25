@@ -1,7 +1,6 @@
+# PI18 message encoding/decoding 
 
-# vim:set sw=4 ts=4 et
-
-def crc(b):
+def crc(b: bytes):
     cv = 0
     d = 0
     t = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7, 0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF]
@@ -20,11 +19,11 @@ def crc(b):
     ch = (cv >> 8) & 0xFF
     if cl in [0x28, 0x0D, 0x0A]: cl+=1
     if ch in [0x28, 0x0D, 0x0A]: ch+=1
-    return ch.to_bytes(1) + cl.to_bytes(1)
+    return ch.to_bytes(1, byteorder='big') + cl.to_bytes(1, byteorder='big')
 
 # encode a PI18 message:
 #   m: ['P' or 'S', 'MGSGtype', values...]
-# ex: enc(['P','EY','2022']) -> b'^P009EY2022\xe5\x9d\r
+# ex: enc(['P','EY','2022']) -> b'^P009EY2022\x81\x1c\r'
 def enc(m):
     mt = m[0].encode()
     b = m[1].encode() + ','.join(str(x) for x in m[2:]).encode()
@@ -32,6 +31,9 @@ def enc(m):
     s = b'^' + mt + ('%03d'%(n+3)).encode() + b
     c = crc(s)
     return s + c + b'\r'
+
+# Encode PI18 query message from list
+def mp(m): return enc(['P'] + m)
 
 # decode a PI18 message
 # m: b'^D0251401234567890123456789p\xa2\r' -> ['D', '1401234567890123456789']
@@ -43,15 +45,15 @@ def dec(m):
     if mt == '0': return ['0', 'NAK']   # rejected command: not implemented or garbage on the serial line
     if mt == '1': return ['1', 'ACK']   # the set command was accepted 
     
-    n = int(m[2:5].decode()) # message len including CRC
+    # ignore the reply crc if we get start "^" and end "\r"
+    # c = m[-3:-1] # CRC for the message
+    # if crc(m[:-3]) != c: return ['E', 'CRC error']  # CRC doesn't match
 
-    c = m[-3:-1] # CRC for the message
-    if crc(m[:-3]) != c: return ['0', 'CRC error']  # CRC doesn't match
-
-    b = m[5:]
-    if len(b) != n: return ['0', 'MSG len malformed']
+    # ignore msg len
+    # n = int(m[2:5].decode()) # message len including CRC
+    # b = m[5:]
+    # if len(b) != n: return ['E', 'MSG len malformed']
 
     b = m[5:-3]    # data buffer excluding CRC and '\r'
-
     l = b.split(b',')
     return [mt] + l
